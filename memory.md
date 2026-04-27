@@ -208,6 +208,9 @@ CSV: UTF-8 BOM + CRLF, 컬럼 = 라인메이트 / 이메일 / 합계.
 5. **Next.js 16 의 "middleware → proxy" 경고**: 현재 `middleware.ts` 가 작동 중. 16.2.4 에서는 deprecation warning 만 뜸. 향후 마이그레이션 대상.
 6. **Supabase JWT role 반영 시점**: DB 에서 `app_metadata.role` 을 바꿔도 **다음 토큰 발급 시** 반영됨. 기존 세션은 로그아웃 후 재로그인 필요.
 7. **콜백의 admin 분기**: `app/auth/callback/route.ts` 에서 `role==='admin'` 이면 linemates 행을 만들지 않고 곧장 `next` 로 보냄.
+8. **Postgres 에 `max(uuid)` aggregate 없음**: SECURITY DEFINER RPC 작성 시 주의. 이름 매칭 등은 `count(*) → 별도 id 쿼리` 두 단계로. (커밋 `9eba523` 에서 한 번 실수했음)
+9. **service_role 로 server-side 무이메일 magic-link 로그인**: `auth.admin.generateLink({type:'magiclink'})` → `auth.verifyOtp({token_hash, type:'magiclink'})`. 쿠키 바인딩된 supabase 서버 클라이언트로 verifyOtp 하면 세션 쿠키가 응답에 자동 set 됨. 메이트 이름-only 로그인의 핵심 패턴 (`app/auth/login/actions.ts`).
+10. **메이트 자유 가입 vs admin 직접 추가**: 현재 메이트는 매직링크 자가가입 후 admin 승인 필요. admin 이 메이트를 직접 만드는 UI 는 없음 (요청 시 추가).
 
 ---
 
@@ -272,6 +275,11 @@ bun -e "import { createClient } from '@supabase/supabase-js'; ..."
 ## 최근 커밋 스택 (참고)
 
 ```
+d191c0f feat(mate): Week 2 MVP — workshop-style mate UI
+9eba523 fix(auth): request_login RPC used non-existent max(uuid)
+21afa8b feat(auth): name-only mate login (drop PIN)
+cd04852 feat(auth): name-only mate login + admin login-requests console
+e9d1aeb docs: refresh recent-commit list in memory.md
 65197ee feat(auth): admin-issued 6-digit PIN for mate login
 3cb93a5 docs: update memory.md for password login
 0e787d4 feat(auth): add password login mode for admin
