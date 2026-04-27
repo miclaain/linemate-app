@@ -10,6 +10,7 @@ import {
 import {
   approveLinemate,
   deactivateLinemate,
+  resetLinematePin,
   updateLinemateProfile,
 } from "./actions";
 
@@ -18,10 +19,14 @@ export default async function LinemateDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{
+    saved?: string;
+    pin?: string;
+    pin_error?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { saved } = await searchParams;
+  const { saved, pin, pin_error: pinError } = await searchParams;
   const { supabase } = await requireAdmin();
 
   const { data: linemate } = await supabase
@@ -91,6 +96,17 @@ export default async function LinemateDetailPage({
               </button>
             </form>
           )}
+          {linemate.status === "active" && (
+            <form action={resetLinematePin}>
+              <input type="hidden" name="id" value={linemate.id} />
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+              >
+                PIN 재발급
+              </button>
+            </form>
+          )}
           {linemate.status !== "inactive" && (
             <form action={deactivateLinemate}>
               <input type="hidden" name="id" value={linemate.id} />
@@ -104,6 +120,26 @@ export default async function LinemateDetailPage({
           )}
         </div>
       </header>
+
+      {pin && (
+        <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30">
+          <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+            로그인 PIN이 발급되었습니다. 메이트에게 전달해주세요.
+          </p>
+          <p className="mt-2 font-mono text-3xl font-bold tracking-widest text-emerald-900 dark:text-emerald-100">
+            {pin}
+          </p>
+          <p className="mt-2 text-xs text-emerald-800 dark:text-emerald-300">
+            이메일: <span className="font-mono">{linemate.email}</span> · 이 화면을 벗어나면 다시 볼 수 없습니다 (재발급은 가능).
+          </p>
+        </div>
+      )}
+
+      {pinError && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+          PIN 발급 실패: {pinError}
+        </p>
+      )}
 
       {saved === "1" && (
         <p className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">

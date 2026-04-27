@@ -24,7 +24,11 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
 
-  const [mode, setMode] = useState<"magic" | "password">("magic");
+  // Default to password mode — both admin (793207) and mates (admin-issued
+  // 6-digit PIN) log in with email + password. Magic link is kept as a
+  // fallback for cases where the password is lost and the user can recover
+  // through email.
+  const [mode, setMode] = useState<"magic" | "password">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [state, setState] = useState<
@@ -143,11 +147,12 @@ export function LoginForm() {
 
       {mode === "password" && (
         <label className="block space-y-1.5">
-          <span className="text-sm font-medium">비밀번호</span>
+          <span className="text-sm font-medium">PIN / 비밀번호</span>
           <input
             type="password"
             required
             autoComplete="current-password"
+            inputMode="numeric"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100"
@@ -185,8 +190,8 @@ export function LoginForm() {
         className="w-full text-center text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
       >
         {mode === "magic"
-          ? "비밀번호로 로그인 (관리자)"
-          : "매직링크로 로그인"}
+          ? "PIN/비밀번호로 로그인"
+          : "이메일 링크로 로그인"}
       </button>
     </form>
   );

@@ -1,6 +1,6 @@
 # 작업 메모리 (세션 핸드오프)
 
-마지막 갱신: 2026-04-27 (admin 비밀번호 로그인 추가 후)
+마지막 갱신: 2026-04-27 (메이트 PIN 로그인 추가 후)
 
 이 문서는 새 세션에서 컨텍스트를 빠르게 복원하기 위한 핵심 사실 모음입니다. 코드는 git 에 있고, 운영 비밀은 `.env.local` 에 있습니다.
 
@@ -34,9 +34,9 @@ Supabase 대시보드는 Vercel Marketplace SSO 로만 접근 가능: `vercel in
 - 비밀번호: `793207` (service_role 로 직접 설정. 변경 시 아래 generateLink 스크립트의 `updateUserById` 패턴 동일)
 - linemates 테이블에는 행 없음(admin 은 라인메이트가 아님). 콜백은 admin role 감지 시 linemates 행 생성을 건너뜀.
 
-**로그인 흐름 (권장 — 비밀번호)**: `/auth/login` → "비밀번호로 로그인 (관리자)" 토글 → `mic@laain.kr` + `793207` → `signInWithPassword` 가 클라이언트에서 세션 쿠키 설정 → `window.location.assign(next)` 로 풀 리로드 → 미들웨어가 admin 감지 → `/admin`.
+**로그인 흐름 (권장 — 비밀번호/PIN)**: `/auth/login` 기본 모드가 비밀번호. 이메일 + 비밀번호(admin) 또는 PIN(메이트) 입력 → `signInWithPassword` 가 클라이언트에서 세션 쿠키 설정 → `window.location.assign(next)` 로 풀 리로드 → 미들웨어가 role 감지 → admin 은 `/admin`, 메이트는 `/`.
 
-**로그인 흐름 (대안 — 매직링크)**: `mic@laain.kr` 로 매직링크 받기 → 클릭하면 `/auth/callback?code=...` → JWT 에 `role=admin` 박혀서 발급 → `/` → 자동 `/admin` 리다이렉트.
+**로그인 흐름 (대안 — 매직링크)**: 토글 "이메일 링크로 로그인" → 매직링크 받기 → 클릭하면 `/auth/callback?code=...` → 콜백이 linemates 행 upsert (admin 은 건너뜀).
 
 **Supabase 기본 SMTP 레이트리밋**: 같은 메일에 시간당 ~4회만 가능. 한도 걸리면 service_role 로 매직링크 직접 생성:
 
@@ -76,7 +76,7 @@ linemate-app/
 ├── app/
 │   ├── layout.tsx, globals.css, page.tsx (admin 자동 리다이렉트)
 │   ├── auth/
-│   │   ├── login/                      # 매직링크 폼 (Suspense + force-dynamic)
+│   │   ├── login/                      # PIN/비밀번호 (기본) + 매직링크 토글, Suspense + force-dynamic
 │   │   ├── callback/route.ts           # 코드 교환 + linemates upsert (admin 건너뜀)
 │   │   └── signout/route.ts
 │   ├── signup/pending/page.tsx
@@ -85,7 +85,7 @@ linemate-app/
 │       ├── page.tsx                    # 대시보드
 │       ├── linemates/
 │       │   ├── page.tsx                # 탭별 목록 (신청대기/활성/비활성/전체)
-│       │   └── [id]/page.tsx + actions.ts  # 승인/거절/비활성/프로필 편집
+│       │   └── [id]/page.tsx + actions.ts  # 승인(+PIN 발급)/거절/비활성/프로필/PIN 재발급
 │       ├── projects/
 │       │   ├── page.tsx, actions.ts    # 목록 + 생성/수정 액션
 │       │   ├── new/page.tsx
@@ -107,6 +107,7 @@ linemate-app/
 ├── lib/
 │   ├── supabase/
 │   │   ├── client.ts, server.ts        # NEXT_PUBLIC anon 키 사용
+│   │   ├── admin.ts                    # service_role 클라이언트 + generatePin() — admin 액션에서만
 │   │   └── middleware.ts               # 세션 갱신 + linemates.status='active' OR admin gate
 │   └── admin/
 │       ├── guard.ts                    # requireAdmin() — 모든 /admin/* + 서버 액션 입구
@@ -148,6 +149,7 @@ linemate-app/
 라인메이트 (`/admin/linemates`)
 - 탭: 신청대기(기본) / 활성 / 비활성 / 전체
 - 상세 페이지: 승인 (활성화) / 거절 또는 비활성화 (status=inactive) / 프로필 편집 (이름·연락처·기본 역할) / 최근 참여 20건
+- **PIN 발급/재발급**: 승인 시 6자리 PIN 자동 생성, 활성 메이트는 "PIN 재발급" 버튼. PIN 은 발급 직후 화면에 1회 표시 (URL flash param). 메이트가 분실하면 admin 이 재발급. 카톡 등으로 직접 전달.
 
 프로젝트 (`/admin/projects`)
 - CRUD + 프로젝트별 참여 내역 50건
@@ -194,11 +196,13 @@ CSV: UTF-8 BOM + CRLF, 컬럼 = 라인메이트 / 이메일 / 합계.
 
 모바일 우선이라 layout.tsx 별도, 하단 탭바 패턴 권장.
 
+**메이트 로그인 = PIN**: 가입승인 시 자동 발급된 6자리 PIN 으로 `/auth/login` 비밀번호 모드에서 로그인. 매직링크 흐름은 fallback. 따라서 `/mate` 진입까지는 별도 인증 작업 불필요.
+
 ### Week 4 (마무리)
 
 - **Resend / SendGrid 등 운영 SMTP** 를 Supabase Auth 에 붙여 매직링크 레이트리밋 해제
 - **mate.lineedu.kr 커스텀 도메인** Vercel + Supabase redirect URL 등록
-- `SUPABASE_SERVICE_ROLE_KEY` 가 Vercel production env 에 들어가 있는지 점검 (Edge Function 으로만 한정해야 안전 — 현재 라우트핸들러에서 안 씀)
+- ~~`SUPABASE_SERVICE_ROLE_KEY` 가 Vercel production env 에 들어가 있는지 점검~~ (Production/Preview/Development 모두 등록 완료. 사용처: `lib/supabase/admin.ts` — admin 액션에서 PIN 발급에 사용. requireAdmin() 게이트 뒤에서만 import 보장)
 - middleware → proxy 마이그레이션
 - 디자인 정리 (관리자 콘솔은 기능 우선으로 만들었음, Tailwind 4 토큰 정리 + ko 폰트)
 - E2E 시나리오 한 번 돌리기 (가입 → 승인 → 참여 등록 → 승인 → 마감 → CSV)
