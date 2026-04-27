@@ -32,6 +32,14 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/auth/login?error=no_user`);
   }
 
+  const role = (user.app_metadata as { role?: string } | null)?.role;
+  const isAdmin = role === "admin";
+
+  // Admins are not 라인메이트s — skip the linemates row entirely.
+  if (isAdmin) {
+    return NextResponse.redirect(`${origin}${next}`);
+  }
+
   // Ensure linemates row exists. RLS policy `linemates_insert_self` allows
   // INSERT where id=auth.uid() AND status='pending'.
   const { data: existing } = await supabase
@@ -58,10 +66,7 @@ export async function GET(request: Request) {
   }
 
   if (existing.status !== "active") {
-    const role = (user.app_metadata as { role?: string } | null)?.role;
-    if (role !== "admin") {
-      return NextResponse.redirect(`${origin}/signup/pending`);
-    }
+    return NextResponse.redirect(`${origin}/signup/pending`);
   }
 
   return NextResponse.redirect(`${origin}${next}`);
