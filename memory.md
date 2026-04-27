@@ -240,6 +240,8 @@ bun -e "import { createClient } from '@supabase/supabase-js'; ..."
 ## 최근 커밋 스택 (참고)
 
 ```
+65197ee feat(auth): admin-issued 6-digit PIN for mate login
+3cb93a5 docs: update memory.md for password login
 0e787d4 feat(auth): add password login mode for admin
 338483f docs: add memory.md for cross-session handoff
 1ddcd1c fix(auth): surface OTP-expired error on login page
