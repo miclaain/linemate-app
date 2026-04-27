@@ -1,6 +1,6 @@
 # 작업 메모리 (세션 핸드오프)
 
-마지막 갱신: 2026-04-27
+마지막 갱신: 2026-04-27 (admin 비밀번호 로그인 추가 후)
 
 이 문서는 새 세션에서 컨텍스트를 빠르게 복원하기 위한 핵심 사실 모음입니다. 코드는 git 에 있고, 운영 비밀은 `.env.local` 에 있습니다.
 
@@ -31,9 +31,12 @@ Supabase 대시보드는 Vercel Marketplace SSO 로만 접근 가능: `vercel in
 ## 관리자 계정
 
 - `mic@laain.kr` (auth.users id `8a2e971d-cfa3-4c0a-9d8f-95e07cdd0aed`) → `app_metadata.role = "admin"` 부여 완료
+- 비밀번호: `793207` (service_role 로 직접 설정. 변경 시 아래 generateLink 스크립트의 `updateUserById` 패턴 동일)
 - linemates 테이블에는 행 없음(admin 은 라인메이트가 아님). 콜백은 admin role 감지 시 linemates 행 생성을 건너뜀.
 
-**로그인 흐름**: `mic@laain.kr` 로 매직링크 받기 → 클릭하면 `/auth/callback?code=...` → JWT 에 `role=admin` 박혀서 발급 → `/` → 자동 `/admin` 리다이렉트.
+**로그인 흐름 (권장 — 비밀번호)**: `/auth/login` → "비밀번호로 로그인 (관리자)" 토글 → `mic@laain.kr` + `793207` → `signInWithPassword` 가 클라이언트에서 세션 쿠키 설정 → `window.location.assign(next)` 로 풀 리로드 → 미들웨어가 admin 감지 → `/admin`.
+
+**로그인 흐름 (대안 — 매직링크)**: `mic@laain.kr` 로 매직링크 받기 → 클릭하면 `/auth/callback?code=...` → JWT 에 `role=admin` 박혀서 발급 → `/` → 자동 `/admin` 리다이렉트.
 
 **Supabase 기본 SMTP 레이트리밋**: 같은 메일에 시간당 ~4회만 가능. 한도 걸리면 service_role 로 매직링크 직접 생성:
 
@@ -233,6 +236,8 @@ bun -e "import { createClient } from '@supabase/supabase-js'; ..."
 ## 최근 커밋 스택 (참고)
 
 ```
+0e787d4 feat(auth): add password login mode for admin
+338483f docs: add memory.md for cross-session handoff
 1ddcd1c fix(auth): surface OTP-expired error on login page
 8ae5f9d feat(admin): Week 3 관리자 콘솔 (대시보드/라인메이트/프로젝트/참여/정산)
 94fe9f1 fix(auth): skip linemates row creation for admin users
