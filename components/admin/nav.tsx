@@ -12,7 +12,7 @@ const items = [
   },
   {
     href: "/admin/login-requests",
-    label: "로그인 요청",
+    label: "로그인 시도",
     match: (p: string) => p.startsWith("/admin/login-requests"),
   },
   {

@@ -89,7 +89,7 @@ export default async function AdminDashboard() {
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <ActionCard
           href="/admin/login-requests"
-          label="로그인 요청"
+          label="로그인 시도 (실패)"
           value={pendingLoginRequests}
           highlight={pendingLoginRequests > 0}
           suffix="건"
