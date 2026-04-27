@@ -24,7 +24,9 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
 
+  const [mode, setMode] = useState<"magic" | "password">("magic");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "sending" }
@@ -71,6 +73,27 @@ export function LoginForm() {
     setState({ kind: "sending" });
 
     const supabase = createClient();
+
+    if (mode === "password") {
+      // signInWithPassword sets the session client-side directly. The server
+      // will pick it up via the Supabase auth cookie on the next request.
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        setState({ kind: "error", message: error.message });
+        return;
+      }
+
+      // Hard navigation so middleware and server components re-read the
+      // freshly-issued session cookie. router.push alone keeps the prior
+      // (unauthenticated) RSC payload cached.
+      window.location.assign(next);
+      return;
+    }
+
     const callbackUrl = new URL("/auth/callback", window.location.origin);
     callbackUrl.searchParams.set("next", next);
 
@@ -118,6 +141,20 @@ export function LoginForm() {
         />
       </label>
 
+      {mode === "password" && (
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium">비밀번호</span>
+          <input
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-2 focus:ring-neutral-900 dark:focus:ring-neutral-100"
+          />
+        </label>
+      )}
+
       {state.kind === "error" && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
           {state.message}
@@ -129,7 +166,27 @@ export function LoginForm() {
         disabled={state.kind === "sending"}
         className="w-full rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-4 py-2.5 text-base font-medium disabled:opacity-50"
       >
-        {state.kind === "sending" ? "보내는 중..." : "로그인 링크 보내기"}
+        {state.kind === "sending"
+          ? mode === "password"
+            ? "로그인 중..."
+            : "보내는 중..."
+          : mode === "password"
+            ? "로그인"
+            : "로그인 링크 보내기"}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setMode((m) => (m === "magic" ? "password" : "magic"));
+          setPassword("");
+          setState({ kind: "idle" });
+        }}
+        className="w-full text-center text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
+      >
+        {mode === "magic"
+          ? "비밀번호로 로그인 (관리자)"
+          : "매직링크로 로그인"}
       </button>
     </form>
   );
