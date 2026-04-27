@@ -10,13 +10,23 @@ function parseFormProject(formData: FormData) {
   const periodStart = String(formData.get("period_start") ?? "").trim();
   const periodEnd = String(formData.get("period_end") ?? "").trim();
   const unitPriceRaw = String(formData.get("default_unit_price") ?? "").trim();
+  const subRateRaw = String(formData.get("sub_rate") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!name) throw new Error("프로젝트명은 필수입니다.");
 
   const unitPrice = Number(unitPriceRaw);
   if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-    throw new Error("기본 단가는 0 이상의 숫자여야 합니다.");
+    throw new Error("메인 단가는 0 이상의 숫자여야 합니다.");
+  }
+
+  let subRate: number | null = null;
+  if (subRateRaw) {
+    const n = Number(subRateRaw);
+    if (!Number.isFinite(n) || n < 0) {
+      throw new Error("보조 단가는 0 이상의 숫자여야 합니다.");
+    }
+    subRate = n;
   }
 
   if (periodStart && periodEnd && periodStart > periodEnd) {
@@ -29,6 +39,7 @@ function parseFormProject(formData: FormData) {
     period_start: periodStart || null,
     period_end: periodEnd || null,
     default_unit_price: unitPrice,
+    sub_rate: subRate,
     notes: notes || null,
   };
 }

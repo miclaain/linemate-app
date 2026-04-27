@@ -1,6 +1,6 @@
 # 작업 메모리 (세션 핸드오프)
 
-마지막 갱신: 2026-04-27 (메이트 이름-only 로그인으로 단순화, PIN 제거)
+마지막 갱신: 2026-04-27 (Week 2 메이트 모바일 화면 MVP 추가)
 
 이 문서는 새 세션에서 컨텍스트를 빠르게 복원하기 위한 핵심 사실 모음입니다. 코드는 git 에 있고, 운영 비밀은 `.env.local` 에 있습니다.
 
@@ -8,7 +8,7 @@
 
 ## 진행 상태 한 줄
 
-Week 1 (인증 골격) + Week 3 (관리자 콘솔) 완료, 프로덕션 배포 완료. **Week 2 (라인메이트 모바일) 미착수**.
+Week 1 (인증 골격) + Week 3 (관리자 콘솔) + **Week 2 MVP** (라인메이트 모바일) 완료, 프로덕션 배포 완료. Week 4 (운영 SMTP/도메인) 남음.
 
 ---
 
@@ -84,6 +84,15 @@ linemate-app/
 │   │   ├── callback/route.ts           # 코드 교환 + linemates upsert (admin 건너뜀)
 │   │   └── signout/route.ts
 │   ├── signup/pending/page.tsx
+│   ├── mate/                           # ★ Week 2 MVP ★
+│   │   ├── layout.tsx                  # 모바일 헤더, 활성 메이트 가드, force-dynamic
+│   │   ├── page.tsx                    # 홈: 통계 카드 + 프로젝트 카드 그리드 + 최근 제출
+│   │   └── participations/
+│   │       ├── page.tsx                # 내 제출 이력
+│   │       └── new/
+│   │           ├── page.tsx            # 등록 폼 셸 (서버)
+│   │           ├── form.tsx            # client form (역할/금액/사유 인터랙션)
+│   │           └── actions.ts          # submitParticipation
 │   └── admin/                          # ★ Week 3 ★
 │       ├── layout.tsx                  # requireAdmin + 사이드바
 │       ├── page.tsx                    # 대시보드
@@ -133,10 +142,13 @@ linemate-app/
 5 테이블 + RLS + RPC 3개 + BEFORE 트리거 1개. 마이그레이션은 `supabase/migrations/`:
 - `20260427120000_initial_schema.sql` — linemates/projects/participations/settlements + finalize_month
 - `20260427180000_login_requests.sql` — login_requests + request_login + resolve_linemate_for_login
+- `20260427190000_fix_request_login.sql` — request_login 의 max(uuid) 버그 수정
+- `20260427200000_project_sub_rate.sql` — projects.sub_rate (보조 단가)
+- `20260427210000_participation_notes.sql` — participations.notes (메이트 특이사항)
 
 - **linemates** — id PK = auth.users.id. status: pending/active/inactive. role 은 여기 아니라 `auth.users.app_metadata.role`.
-- **projects** — `default_unit_price` 가 참여 단가의 폴백.
-- **participations** — `(linemate_id, project_id, date)` UNIQUE. `unit_price` NULL 이면 project 기본단가 적용. `locked` BOOLEAN — 마감 시 TRUE 로 잠김.
+- **projects** — `default_unit_price` (메인 단가) + `sub_rate` (보조 단가, nullable). 메이트 UI 가 역할 선택 시 자동 채움.
+- **participations** — `(linemate_id, project_id, date)` UNIQUE. `unit_price` NULL 이면 project 기본단가 적용. `locked` BOOLEAN — 마감 시 TRUE 로 잠김. `notes` 컬럼 — 메이트가 정산 등록 시 입력한 특이사항 (단가 수정 시 사유 필수).
 - **settlements** — 월별 라인메이트 합계. **`finalize_month` RPC 로만 INSERT 가능**. `(year_month, linemate_id)` UNIQUE.
 - **login_requests** — 이제 audit log 용도. 이름-only 로그인 시도 중 **실패한 경우** (미매칭/동명이인) 만 행이 INSERT 됨. 성공 로그인은 기록 안 함. admin 만 SELECT/UPDATE.
 
@@ -201,21 +213,22 @@ CSV: UTF-8 BOM + CRLF, 컬럼 = 라인메이트 / 이메일 / 합계.
 
 ## 미완료 / 다음 작업 후보
 
-### Week 2 (다음 우선순위) — 라인메이트 모바일
+### Week 2 (MVP 완료) — 라인메이트 모바일
 
-`/` 가 현재 admin 만 `/admin` 으로 리다이렉트하고, 라인메이트(active)는 임시 안내만 표시. Week 2 에서 이 자리를 채워야 함.
+`workshop-settlement-app` (지옥의 AI 폴더) 의 UX 를 참고해 구현.
 
-화면:
-- `/mate` (또는 `/`) — 모바일 홈: 내 정산 요약, 최근 참여, "+ 참여 등록" CTA
-- `/mate/participations/new` — 참여 등록 폼 (프로젝트 선택, 날짜, 역할 [기본값=role_default], 시간, 단가는 선택)
-- `/mate/participations` — 내 참여 이력 (status 별 / 월별)
-- `/mate/settlements` — 내 월별 정산 (마감된 것 + 이번 달 draft)
+- `/` 는 admin 이면 `/admin`, 메이트면 `/mate` 로 자동 리다이렉트
+- `/mate` 홈: 미제출/이번달제출 카드 + 진행 중 프로젝트 카드 그리드 (메인/보조 단가 표시) + 최근 제출 5건
+- `/mate/participations/new?project=<id>` — 워크숍 정산 등록 폼:
+  - 날짜 (date input, 기본값=오늘 또는 프로젝트 기간 클램프)
+  - 역할 버튼 (메인/보조). 클릭 시 금액 자동 채움
+  - 금액 직접 수정 가능. 기본 단가와 다르면 "특이사항" 필수 (워크숍 앱 패턴 그대로)
+  - 제출 → RLS `participations_insert_self` 로 status=pending 행 INSERT
+- `/mate/participations` — 내 제출 이력 카드 리스트 (status pill, notes, reject_reason 포함)
 
-서버 액션은 RLS `participations_insert_self` (status='pending', linemate_id=auth.uid(), linemates.status='active' 필요) 정책에 맞춰 INSERT.
+미구현: `/mate/settlements` (내 월별 정산 요약). 추가 작업 시 진행.
 
-모바일 우선이라 layout.tsx 별도, 하단 탭바 패턴 권장.
-
-**메이트 로그인 = PIN**: 가입승인 시 자동 발급된 6자리 PIN 으로 `/auth/login` 비밀번호 모드에서 로그인. 매직링크 흐름은 fallback. 따라서 `/mate` 진입까지는 별도 인증 작업 불필요.
+**메이트 로그인 = 이름만**: 자세한 흐름은 위 "로그인 흐름" 섹션 참조.
 
 ### Week 4 (마무리)
 

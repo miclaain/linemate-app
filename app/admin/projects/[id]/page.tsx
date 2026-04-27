@@ -23,7 +23,7 @@ export default async function ProjectDetailPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, client, period_start, period_end, default_unit_price, notes, created_at")
+    .select("id, name, client, period_start, period_end, default_unit_price, sub_rate, notes, created_at")
     .eq("id", id)
     .maybeSingle();
 

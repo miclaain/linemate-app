@@ -9,6 +9,7 @@ type Project = {
   period_start?: string | null;
   period_end?: string | null;
   default_unit_price?: number | null;
+  sub_rate?: number | null;
   notes?: string | null;
 };
 
@@ -63,22 +64,38 @@ export function ProjectForm({
         </Field>
       </div>
 
-      <Field
-        label="기본 단가 (원)"
-        required
-        hint="참여 등록 시 단가 미지정 항목에 적용됩니다."
-      >
-        <input
-          type="number"
-          name="default_unit_price"
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field
+          label="메인 단가 (원)"
           required
-          min="0"
-          step="1"
-          defaultValue={project?.default_unit_price ?? ""}
-          placeholder="500000"
-          className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm tabular-nums"
-        />
-      </Field>
+          hint="참여 등록 시 메인 역할의 기본값"
+        >
+          <input
+            type="number"
+            name="default_unit_price"
+            required
+            min="0"
+            step="1"
+            defaultValue={project?.default_unit_price ?? ""}
+            placeholder="500000"
+            className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm tabular-nums"
+          />
+        </Field>
+        <Field
+          label="보조 단가 (원)"
+          hint="비워두면 보조 옵션 비활성화"
+        >
+          <input
+            type="number"
+            name="sub_rate"
+            min="0"
+            step="1"
+            defaultValue={project?.sub_rate ?? ""}
+            placeholder="250000"
+            className="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2 text-sm tabular-nums"
+          />
+        </Field>
+      </div>
 
       <Field label="메모">
         <textarea
