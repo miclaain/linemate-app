@@ -22,6 +22,7 @@ export default async function AdminDashboard() {
     pendingLinematesRes,
     activeLinematesRes,
     pendingPartsRes,
+    pendingLoginReqRes,
     monthDraftRes,
     monthFinalizedRes,
   ] = await Promise.all([
@@ -35,6 +36,10 @@ export default async function AdminDashboard() {
       .eq("status", "active"),
     supabase
       .from("participations")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending"),
+    supabase
+      .from("login_requests")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
     supabase
@@ -52,6 +57,7 @@ export default async function AdminDashboard() {
   const pendingLinemates = pendingLinematesRes.count ?? 0;
   const activeLinemates = activeLinematesRes.count ?? 0;
   const pendingParts = pendingPartsRes.count ?? 0;
+  const pendingLoginRequests = pendingLoginReqRes.count ?? 0;
 
   const monthDraftRows = (monthDraftRes.data ?? []) as unknown as Array<{
     unit_price: number | null;
@@ -80,7 +86,14 @@ export default async function AdminDashboard() {
         </p>
       </header>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <ActionCard
+          href="/admin/login-requests"
+          label="로그인 요청"
+          value={pendingLoginRequests}
+          highlight={pendingLoginRequests > 0}
+          suffix="건"
+        />
         <ActionCard
           href="/admin/linemates?status=pending"
           label="가입 신청"

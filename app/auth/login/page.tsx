@@ -16,7 +16,8 @@ export default function LoginPage() {
         <header className="space-y-1">
           <h1 className="text-2xl font-semibold">라인메이트 로그인</h1>
           <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            관리자에게 받은 PIN으로 로그인하세요.
+            이름과 PIN을 입력하세요. PIN을 모르면 관리자에게 요청을 보내실 수
+            있습니다.
           </p>
         </header>
 

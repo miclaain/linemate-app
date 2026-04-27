@@ -1,6 +1,6 @@
 # 작업 메모리 (세션 핸드오프)
 
-마지막 갱신: 2026-04-27 (메이트 PIN 로그인 추가 후)
+마지막 갱신: 2026-04-27 (메이트 이름 로그인 + 로그인 요청 콘솔 추가 후)
 
 이 문서는 새 세션에서 컨텍스트를 빠르게 복원하기 위한 핵심 사실 모음입니다. 코드는 git 에 있고, 운영 비밀은 `.env.local` 에 있습니다.
 
@@ -34,9 +34,13 @@ Supabase 대시보드는 Vercel Marketplace SSO 로만 접근 가능: `vercel in
 - 비밀번호: `793207` (service_role 로 직접 설정. 변경 시 아래 generateLink 스크립트의 `updateUserById` 패턴 동일)
 - linemates 테이블에는 행 없음(admin 은 라인메이트가 아님). 콜백은 admin role 감지 시 linemates 행 생성을 건너뜀.
 
-**로그인 흐름 (권장 — 비밀번호/PIN)**: `/auth/login` 기본 모드가 비밀번호. 이메일 + 비밀번호(admin) 또는 PIN(메이트) 입력 → `signInWithPassword` 가 클라이언트에서 세션 쿠키 설정 → `window.location.assign(next)` 로 풀 리로드 → 미들웨어가 role 감지 → admin 은 `/admin`, 메이트는 `/`.
+**로그인 흐름 (메이트 — 기본)**: `/auth/login` 기본 모드 = "이름 + PIN". 메이트가 이름 + PIN 입력 → 서버 액션 `loginByNameAndPin` 이 SECURITY DEFINER RPC `resolve_linemate_for_login(name)` 으로 활성 메이트 1명 매칭 시 email 반환 → 동일 supabase 서버 클라이언트로 `signInWithPassword` (쿠키 바인딩) → 클라이언트에서 `window.location.assign(next)` 풀 리로드. 동명이인/미매칭은 동일한 일반 오류 메시지로 enumerate 방지.
 
-**로그인 흐름 (대안 — 매직링크)**: 토글 "이메일 링크로 로그인" → 매직링크 받기 → 클릭하면 `/auth/callback?code=...` → 콜백이 linemates 행 upsert (admin 은 건너뜀).
+**로그인 흐름 (메이트 — PIN 모름)**: 동일 페이지 "PIN을 모르시나요?" 버튼 → `requestLoginByName(name)` → `request_login` RPC 가 `login_requests` 행 INSERT (`status=pending`, 매칭되면 `linemate_id` 채움) → admin `/admin/login-requests` 에서 "PIN 발급" 클릭 → service_role 로 password 갱신 + 화면에 PIN 1회 표시 → 카톡으로 메이트에게 전달.
+
+**로그인 흐름 (admin)**: 토글 "이메일로 로그인" → `mic@laain.kr` + `793207` → `signInWithPassword` 직접.
+
+**로그인 흐름 (대안 — 매직링크)**: 토글 "이메일 링크" → 매직링크 → `/auth/callback?code=...` → 콜백이 linemates upsert (admin 은 건너뜀).
 
 **Supabase 기본 SMTP 레이트리밋**: 같은 메일에 시간당 ~4회만 가능. 한도 걸리면 service_role 로 매직링크 직접 생성:
 
@@ -76,7 +80,7 @@ linemate-app/
 ├── app/
 │   ├── layout.tsx, globals.css, page.tsx (admin 자동 리다이렉트)
 │   ├── auth/
-│   │   ├── login/                      # PIN/비밀번호 (기본) + 매직링크 토글, Suspense + force-dynamic
+│   │   ├── login/                      # 이름+PIN(기본)/이메일+PIN/매직링크, actions.ts (RPC 호출), Suspense + force-dynamic
 │   │   ├── callback/route.ts           # 코드 교환 + linemates upsert (admin 건너뜀)
 │   │   └── signout/route.ts
 │   ├── signup/pending/page.tsx
@@ -86,6 +90,9 @@ linemate-app/
 │       ├── linemates/
 │       │   ├── page.tsx                # 탭별 목록 (신청대기/활성/비활성/전체)
 │       │   └── [id]/page.tsx + actions.ts  # 승인(+PIN 발급)/거절/비활성/프로필/PIN 재발급
+│       ├── login-requests/              # 메이트 이름 로그인 요청 처리
+│       │   ├── page.tsx                 # 대기/처리완료 목록
+│       │   └── actions.ts               # issuePinForRequest, cancelLoginRequest
 │       ├── projects/
 │       │   ├── page.tsx, actions.ts    # 목록 + 생성/수정 액션
 │       │   ├── new/page.tsx
@@ -123,12 +130,19 @@ linemate-app/
 
 ## 데이터 모델 핵심
 
-4 테이블 + RLS + RPC 1개 + BEFORE 트리거 1개. 자세한 정의는 `supabase/migrations/20260427120000_initial_schema.sql`.
+5 테이블 + RLS + RPC 3개 + BEFORE 트리거 1개. 마이그레이션은 `supabase/migrations/`:
+- `20260427120000_initial_schema.sql` — linemates/projects/participations/settlements + finalize_month
+- `20260427180000_login_requests.sql` — login_requests + request_login + resolve_linemate_for_login
 
 - **linemates** — id PK = auth.users.id. status: pending/active/inactive. role 은 여기 아니라 `auth.users.app_metadata.role`.
 - **projects** — `default_unit_price` 가 참여 단가의 폴백.
 - **participations** — `(linemate_id, project_id, date)` UNIQUE. `unit_price` NULL 이면 project 기본단가 적용. `locked` BOOLEAN — 마감 시 TRUE 로 잠김.
 - **settlements** — 월별 라인메이트 합계. **`finalize_month` RPC 로만 INSERT 가능**. `(year_month, linemate_id)` UNIQUE.
+- **login_requests** — 메이트 이름 로그인 요청. anon 은 INSERT/SELECT 불가, 오직 `request_login(name)` RPC (SECURITY DEFINER) 로만 INSERT. admin 만 SELECT/UPDATE.
+
+**이름 로그인 RPC 2개** (둘 다 SECURITY DEFINER, anon GRANT):
+- `request_login(p_name)` → JSONB `{id, resolved}` 반환. resolved ∈ {matched, ambiguous, unknown}. 어떤 경우든 행은 항상 INSERT (admin 이 미매칭 시도도 보게).
+- `resolve_linemate_for_login(p_name)` → 활성 메이트 1명 매칭 시 email 반환. 0/2+ 매칭은 NULL (동일 오류 메시지로 enumeration 방지).
 
 **3중 마감 방어**:
 1. RLS 정책 `participations_update_admin` USING `locked = FALSE`
@@ -142,9 +156,14 @@ linemate-app/
 ## Week 3 관리자 콘솔 — 무엇이 가능한가
 
 대시보드 (`/admin`)
-- 가입 신청 / 참여 승인 대기 / 활성 라인메이트 수 카드 (액션 필요 항목은 강조)
+- 로그인 요청 / 가입 신청 / 참여 승인 대기 / 활성 라인메이트 수 카드 (액션 필요 항목은 강조)
 - 이번 달 정산 합계 (마감 전이면 실시간 SUM, 후면 settlements 합계)
 - 빠른 이동 (새 프로젝트, 프로젝트 목록 등)
+
+로그인 요청 (`/admin/login-requests`)
+- 메이트가 `/auth/login` 에서 이름으로 PIN 요청 보낸 내역
+- 매칭된 메이트가 있으면 "PIN 발급" 클릭 → service_role 이 password 갱신 + 화면에 PIN 1회 표시
+- 미매칭/동명이인은 "취소" 또는 메이트와 직접 확인 후 라인메이트 상세에서 PIN 재발급
 
 라인메이트 (`/admin/linemates`)
 - 탭: 신청대기(기본) / 활성 / 비활성 / 전체

@@ -11,6 +11,11 @@ const items = [
     match: (p: string) => p.startsWith("/admin/linemates"),
   },
   {
+    href: "/admin/login-requests",
+    label: "로그인 요청",
+    match: (p: string) => p.startsWith("/admin/login-requests"),
+  },
+  {
     href: "/admin/projects",
     label: "프로젝트",
     match: (p: string) => p.startsWith("/admin/projects"),
