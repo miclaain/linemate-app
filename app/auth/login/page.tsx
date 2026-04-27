@@ -1,6 +1,10 @@
 import { Suspense } from "react";
 import { LoginForm } from "./login-form";
 
+// Force dynamic rendering. /auth/login uses useSearchParams (client), and
+// Vercel's CLI builder didn't accept the static-with-suspense output.
+export const dynamic = "force-dynamic";
+
 /**
  * Magic-link login. Server component wraps the client form in Suspense
  * so useSearchParams() doesn't bail prerendering.
